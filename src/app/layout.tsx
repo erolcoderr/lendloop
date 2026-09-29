@@ -15,7 +15,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Lora gives headings a warm, community-gazette feel — pairs with the Bayanihan tone.
 const lora = Lora({
   variable: "--font-display",
   subsets: ["latin"],
@@ -25,25 +24,8 @@ const lora = Lora({
 export const metadata: Metadata = {
   title: "LendLoop — A Digital Bayanihan Resource Sharing System",
   description:
-    "Borrow tools, gear, and appliances from trusted neighbors. LendLoop revives the Filipino spirit of bayanihan — one shared item at a time.",
-  keywords: [
-    "LendLoop",
-    "Bayanihan",
-    "resource sharing",
-    "community lending",
-    "borrow tools",
-    "Philippines",
-  ],
+    "Borrow tools, gear, and appliances from trusted neighbors. LendLoop revives the Filipino spirit of bayanihan.",
   authors: [{ name: "LendLoop" }],
-  icons: {
-    icon: "/logo.svg",
-  },
-  openGraph: {
-    title: "LendLoop — A Digital Bayanihan",
-    description:
-      "Borrow tools, gear, and appliances from trusted neighbors. Reviving bayanihan, one shared item at a time.",
-    type: "website",
-  },
 };
 
 export default function RootLayout({
