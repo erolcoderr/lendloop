@@ -1,0 +1,349 @@
+// LendLoop — Prisma schema (MySQL)
+// Full domain model matching the prototype's types.ts.
+// Run: bun run db:push  (creates tables)
+// Run: bun run db:seed  (populates with the barangay seed data)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/* ----------------------------------------------------------------- enums */
+
+enum Role {
+  user
+  admin
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+enum ItemCategory {
+  Tools
+  Outdoor
+  Electronics
+  Kitchen
+  Party
+  Sports
+  Books
+  Vehicles
+}
+
+enum ItemCondition {
+  LikeNew
+  Good
+  Fair
+}
+
+enum ItemStatus {
+  available
+  reserved
+  borrowed
+}
+
+enum RequestStatus {
+  pending
+  approved
+  borrowed
+  returned
+  rejected
+  cancelled
+}
+
+enum NotificationType {
+  request_received
+  request_approved
+  request_rejected
+  borrow_started
+  return_reminder
+  item_returned
+  review_received
+  verification_approved
+  verification_rejected
+  system
+}
+
+enum VerificationStatus {
+  unverified
+  pending
+  approved
+  rejected
+}
+
+/* ------------------------------------------------------------------ User */
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  // Hashed with Node crypto.scrypt. Never store plaintext in production.
+  password  String
+  avatar    String   @db.LongText
+  barangay  String
+  city      String
+  role      Role     @default(user)
+  status    UserStatus @default(active)
+  verified  Boolean  @default(false)
+  joinedAt  DateTime @default(now())
+  bio       String?  @db.Text
+  phone     String?
+
+  // Face/ID verification (capstone security feature).
+  // Images stored as base64 data URLs in MySQL TEXT columns.
+  verificationStatus VerificationStatus @default(unverified)
+  faceImage          String?  @db.LongText
+  idImage            String?  @db.LongText
+  verificationSubmittedAt DateTime?
+  verificationReviewedAt  DateTime?
+  verificationNote        String?  @db.Text
+
+  // relations
+  itemsOwned      Item[]
+  requestsBorrowed BorrowRequest[] @relation("BorrowerRequests")
+  requestsOwned   BorrowRequest[] @relation("OwnerRequests")
+  reviewsWritten  Review[]        @relation("ReviewAuthor")
+  reviewsReceived Review[]        @relation("ReviewSubject")
+  notifications   Notification[]
+  socialLinks     SocialLink[]
+  reportsFiled    Report[]        @relation("ReportsFiled")
+  trustAdjustments TrustAdjustment[] @relation("TrustAdjustments")
+  sentMessages    Message[]       @relation("SentMessages")
+
+  @@index([role])
+  @@index([status])
+  @@index([verificationStatus])
+}
+
+/* ------------------------------------------------------------------ Item */
+
+model Item {
+  id          String       @id @default(cuid())
+  title       String
+  description String       @db.Text
+  category    ItemCategory
+  condition   ItemCondition
+  // JSON array of image URLs. MySQL JSON column.
+  images      Json
+  primaryImageIndex Int   @default(0)
+  maxBorrowDays Int
+  deposit     Int
+  // JSON array of "yyyy-mm-dd" strings already booked.
+  bookedDates Json
+  status      ItemStatus   @default(available)
+  location    String
+  createdAt   DateTime     @default(now())
+  views       Int          @default(0)
+
+  ownerId     String
+  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  requests    BorrowRequest[]
+  reviews     Review[]
+
+  @@index([category])
+  @@index([status])
+  @@index([ownerId])
+}
+
+/* -------------------------------------------------------- BorrowRequest */
+
+model BorrowRequest {
+  id             String         @id @default(cuid())
+  itemId         String
+  borrowerId     String
+  ownerId        String
+  startDate      DateTime       @db.Date
+  endDate        DateTime       @db.Date
+  message        String         @db.Text
+  status         RequestStatus  @default(pending)
+  agreementSigned Boolean       @default(false)
+  signatureName  String         @default("")
+  agreementText  String?        @db.Text
+  wantsCopy     Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  borrowedAt     DateTime?
+  returnedAt     DateTime?
+
+  item           Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  borrower       User           @relation("BorrowerRequests", fields: [borrowerId], references: [id], onDelete: Cascade)
+  owner          User           @relation("OwnerRequests", fields: [ownerId], references: [id], onDelete: Cascade)
+  reviews        Review[]
+  messages       Message[]
+
+  @@index([status])
+  @@index([borrowerId])
+  @@index([ownerId])
+  @@index([itemId])
+}
+
+/* ---------------------------------------------------------------- Review */
+
+model Review {
+  id          String   @id @default(cuid())
+  fromUserId  String
+  toUserId    String
+  itemId      String
+  requestId   String?
+  rating      Int
+  comment     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  fromUser    User     @relation("ReviewAuthor", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser      User     @relation("ReviewSubject", fields: [toUserId], references: [id], onDelete: Cascade)
+  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  request     BorrowRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@index([toUserId])
+  @@index([itemId])
+  @@index([fromUserId])
+}
+
+/* --------------------------------------------------------- Notification */
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  // Optional router link stored as JSON: { view, params }
+  link      Json?
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
+
+/* ---------------------------------------------------------- SocialLink */
+
+/**
+ * Social media links for trust score bonuses.
+ * Users add links (Facebook, Instagram, LinkedIn, etc.) and the admin
+ * approves them. Each approved link adds +5 or +10 to the trust score.
+ */
+enum SocialPlatform {
+  facebook
+  instagram
+  twitter
+  linkedin
+  tiktok
+  github
+  youtube
+  website
+}
+
+enum LinkStatus {
+  pending
+  approved
+  rejected
+}
+
+model SocialLink {
+  id          String         @id @default(cuid())
+  userId      String
+  platform    SocialPlatform
+  url         String         @db.Text
+  status      LinkStatus     @default(pending)
+  bonus       Int            @default(1)
+  createdAt   DateTime       @default(now())
+  reviewedAt  DateTime?
+
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+/* -------------------------------------------------------------- Message */
+
+/**
+ * In-app chat messages between a borrower and an item owner, scoped to a
+ * single BorrowRequest. Only the borrower + owner of that request can read
+ * and send messages in the thread.
+ */
+model Message {
+  id        String   @id @default(cuid())
+  requestId String
+  senderId  String
+  content   String   @db.Text
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  request   BorrowRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  sender    User          @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([senderId])
+  @@index([read])
+}
+
+/* --------------------------------------------------------------- Report */
+
+/**
+ * User-submitted reports/concerns sent to the admin for review.
+ * Users can report items, other users, or general platform concerns.
+ */
+enum ReportType {
+  item
+  user
+  transaction
+  platform
+  other
+}
+
+enum ReportStatus {
+  open
+  reviewing
+  resolved
+  dismissed
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  reporterId  String
+  type        ReportType
+  subject     String
+  description String       @db.Text
+  status      ReportStatus @default(open)
+  adminNote   String?      @db.Text
+  createdAt   DateTime     @default(now())
+  reviewedAt  DateTime?
+
+  // Optional references (nullable — not all reports target a specific item/user).
+  targetItemId   String?
+  targetUserId   String?
+
+  reporter    User         @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([reporterId])
+  @@index([type])
+}
+
+/* ------------------------------------------------------- TrustAdjustment */
+
+/**
+ * Admin-issued trust point adjustments (bonuses or deductions).
+ * Stored separately from reviews/social links so the admin can
+ * add/deduct points with a reason note.
+ */
+model TrustAdjustment {
+  id          String   @id @default(cuid())
+  userId      String
+  adminId     String
+  amount      Int      // positive = bonus, negative = deduction
+  reason      String   @db.Text
+  createdAt   DateTime @default(now())
+
+  user        User     @relation("TrustAdjustments", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
