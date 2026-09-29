@@ -92,7 +92,7 @@ export function Footer() {
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row">
-          <p>© {new Date().getFullYear()} LendLoop. A capstone prototype for community good.</p>
+          <p>© {new Date().getFullYear()} LendLoop. A project prototype for community good.</p>
           <p className="inline-flex items-center gap-1.5">
             Built with <Heart className="h-3.5 w-3.5 fill-primary text-primary" /> in the Philippines
           </p>
