@@ -261,7 +261,7 @@ export default function LandingView() {
                       <step.icon className="h-5 w-5" />
                     </span>
                     <span
-                      className="font-[var(--font-display)] text-3xl font-bold text-primary/15"
+                      className="font-[var(--font-display)] text-3xl font-bold text-primary"
                       aria-hidden
                     >
                       0{step.step}
@@ -414,29 +414,6 @@ function HeroMosaic({
           ))}
         </div>
       </div>
-
-      {/* Floating trust pill */}
-      {verifiedUser && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.35, delay: 0.4 }}
-          className="absolute -left-4 bottom-24 hidden rounded-xl border border-border bg-card/95 p-3 shadow-lg backdrop-blur sm:block"
-        >
-          <div className="flex items-center gap-2.5">
-            <Avatar user={verifiedUser} size={36} />
-            <div>
-              <p className="text-xs font-semibold text-foreground">
-                {verifiedUser.name}
-              </p>
-              <p className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                <ShieldCheck className="h-3 w-3" />
-                Verified · Trust {verifiedScore}
-              </p>
-            </div>
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 }
